@@ -43,6 +43,8 @@
 #include "simple-udp.h"
 #include "servreg-hack.h"
 #include "wvwms_functions.h"
+#include "dev/serial-line.h"
+
 
 #include <stdio.h>
 #include <string.h>
@@ -57,7 +59,9 @@ static struct simple_udp_connection unicast_connection;
 
 /*---------------------------------------------------------------------------*/
 PROCESS(unicast_sender_process, "Unicast sender example process");
-AUTOSTART_PROCESSES(&unicast_sender_process);
+PROCESS(test_serial, "Serial line test process");
+AUTOSTART_PROCESSES(&unicast_sender_process, &test_serial);
+
 /*---------------------------------------------------------------------------*/
 static void
 receiver(struct simple_udp_connection *c,
@@ -72,7 +76,7 @@ receiver(struct simple_udp_connection *c,
 	  receiver_port, sender_port, datalen);
 }
 
-
+static void
 set_global_address(void)
 {
   uip_ipaddr_t ipaddr;
@@ -110,20 +114,23 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
                       NULL, UDP_PORT, receiver);
 
   etimer_set(&periodic_timer, SEND_INTERVAL);
+  wvwms_init();
   while(1) {
-	
+	printf("Calling wvwms test\n");
     wvwms_test();  
-
+    printf("Exiting wvwms test\n");
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&periodic_timer));
+    printf("X2\n");
     etimer_reset(&periodic_timer);
     etimer_set(&send_timer, SEND_TIME);
-
+    printf("X3\n");
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&send_timer));
+    printf("X4\n");
     addr = servreg_hack_lookup(SERVICE_ID);
+    printf("X5\n");
     if(addr != NULL) {
       static unsigned int message_number;
       char buf[20];
-
       printf("Sending unicast to ");
       uip_debug_ipaddr_print(addr);
       printf("\n");
@@ -131,10 +138,23 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
       message_number++;
       simple_udp_sendto(&unicast_connection, buf, strlen(buf) + 1, addr);
     } else {
+      printf("X6\n");
       printf("Service %d not found\n", SERVICE_ID);
     }
   }
 
+  PROCESS_END();
+}
+
+PROCESS_THREAD(test_serial, ev, data)
+{
+  PROCESS_BEGIN();
+  //for(;;) {
+    PROCESS_YIELD();
+    if(ev == serial_line_event_message) {
+      printf("received line: %s\n", (char *)data);
+    }
+  //}
   PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/

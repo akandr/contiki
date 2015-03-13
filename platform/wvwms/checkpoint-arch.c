@@ -39,12 +39,11 @@
 
 #include "contiki.h"
 #include "lib/checkpoint.h"
-
+#include "dev/leds.h"
 #include "sys/rtimer.h"
 #include "sys/mt.h"
 #include "cfs/cfs.h"
 #include "cfs/cfs-coffee.h"
-#include "dev/leds.h"
 #include "dev/watchdog.h"
 
 #include <stdio.h>

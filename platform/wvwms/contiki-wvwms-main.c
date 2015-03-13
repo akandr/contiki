@@ -37,7 +37,6 @@
 #include "dev/leds.h"
 #include "dev/serial-line.h"
 #include "dev/slip.h"
-#include "dev/uart0.h"
 #include "dev/uart1.h"
 #include "dev/watchdog.h"
 #include "dev/xmem.h"
@@ -204,40 +203,20 @@ main(int argc, char **argv)
   msp430_cpu_init();
   clock_init();
   leds_init();
+  leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
 
-  leds_on(LEDS_RED);
-
-  clock_wait(2);
 
   uart1_init(115200); /* Must come before first printf */
-  uart0_init(115200);
+
 #if WITH_UIP
   slip_arch_init(115200);
 #endif /* WITH_UIP */
 
   clock_wait(1);
 
-  leds_on(LEDS_GREEN);
-  //ds2411_init();
-
-  /* XXX hack: Fix it so that the 802.15.4 MAC address is compatible
-     with an Ethernet MAC address - byte 0 (byte 2 in the DS ID)
-     cannot be odd. */
-  //ds2411_id[2] &= 0xfe;
-
-  leds_on(LEDS_BLUE);
-  //xmem_init();
-
-  leds_off(LEDS_RED);
   rtimer_init();
-  /*
-   * Hardware initialization done!
-   */
 
   node_id = NODE_ID;
-
-  /* Restore node id if such has been stored in external mem */
-  //node_id_restore();
 
   /* for setting "hardcoded" IEEE 802.15.4 MAC addresses */
 #ifdef IEEE_802154_MAC_ADDRESS
@@ -248,12 +227,7 @@ main(int argc, char **argv)
   }
 #endif
 
-  //random_init(ds2411_id[0] + node_id);
 
-  leds_off(LEDS_BLUE);
-  /*
-   * Initialize Contiki and our processes.
-   */
   process_init();
   process_start(&etimer_process, NULL);
 
