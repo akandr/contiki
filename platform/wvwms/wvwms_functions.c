@@ -3,30 +3,41 @@
 #include "dev/uart0.h"
 #include "contiki.h"
 
-unsigned char cnt;
-unsigned char frame_size;
+uint8_t cnt;
+uint8_t frame_size;
 unsigned char rxbuf[RXBUF_SIZE];
 unsigned char msg[RXBUF_SIZE];
-process_event_t arm_message;
 
-PROCESS(test_serial_process, "Serial test process");
-AUTOSTART_PROCESSES(&test_serial_process);
+process_event_t arm_message;
 
 int arm_handler(unsigned char c)
 {
-	int i;
-	if((!cnt)&&(c==FRAME_START_1)) cnt++;
-	if((cnt==1)&&(c==FRAME_START_2)){
+	uint16_t i;
+	if((cnt==0)&&(c==FRAME_START_1)){
 		cnt++;
-	} else {
-		cnt=0;
+		return 0;
 	}
-	if(cnt==2) frame_size=c;
-	if(cnt>2){
+	else if((cnt==1)&&(c==FRAME_START_2)){
+		cnt++;
+		return 0;
+	}
+	else if((cnt == 0)||(cnt== 1)) {
+		cnt=0;
+		frame_size=0;
+		return 0;
+	}
+	else if(cnt==2){
+		frame_size=c;
+		rxbuf[cnt]=frame_size;
+		cnt++;
+		return 0;
+	}
+	else if(cnt>2 && (cnt<(frame_size+3))){
 		rxbuf[cnt]=c;
 		cnt++;
+		return 0;
 	}
-	if(cnt>=(frame_size+2)){
+	else{
 		for(i=0;i<=frame_size;i++){
 			msg[i]=rxbuf[2+i];
 		}
@@ -51,38 +62,37 @@ void wvwms_init(void)
     frame_size=0;
     uart0_init(115200);
     uart0_set_input(&arm_handler);
+    arm_message = process_alloc_event();
     printf("%s executed\n", __func__);
+}
+
+void arm_power_off(void)
+{
+	MCP_ENABLE_LOW;
+}
+
+void arm_power_on(void)
+{
+	MCP_ENABLE_HI;
+}
+
+void send_arm(char *data, uint8_t size)
+{
+	uint8_t i;
+	uart0_writeb(FRAME_START_1);
+	uart0_writeb(FRAME_START_2);
+	uart0_writeb((unsigned char)size);
+	for(i=0;i<size;i++){
+		uart0_writeb(*(data+i));
+	}
 }
 
 void wvwms_test(void)
 {
-	leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
+	unsigned char data[] = "this is msp\n";
+	leds_toggle(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
 	printf("This is wvwms test %s %s\n", __DATE__, __TIME__);
-	uart0_writeb('x');
+	send_arm(data, sizeof(data));
 }
 
-PROCESS_THREAD(test_serial_process, ev, data)
-{
-  int i;
-  static struct etimer et;
 
-  PROCESS_BEGIN();
-
-  etimer_set(&et, CLOCK_SECOND);
-
-  while(1) {
-    PROCESS_WAIT_EVENT();
-
-    if (etimer_expired(&et)) {
-      printf("Waiting for serial data\n");
-      etimer_restart(&et);
-    }
-
-    if(ev == arm_message) {
-      for(i=0; i<*(char *)data;i++)
-    	  printf("%c", *((char* )data+1+i));
-    }
-  }
-
-  PROCESS_END();
-}

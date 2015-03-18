@@ -40,3 +40,6 @@
 
 void wvwms_init(void);
 void wvwms_test(void);
+void arm_power_off(void);
+void arm_power_on(void);
+void send_arm(char *data, uint8_t size);

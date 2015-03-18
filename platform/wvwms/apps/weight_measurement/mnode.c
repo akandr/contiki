@@ -43,7 +43,6 @@
 #include "simple-udp.h"
 #include "servreg-hack.h"
 #include "wvwms_functions.h"
-#include "dev/serial-line.h"
 
 
 #include <stdio.h>
@@ -56,11 +55,11 @@
 #define SEND_TIME		(random_rand() % (SEND_INTERVAL))
 
 static struct simple_udp_connection unicast_connection;
-
+extern process_event_t arm_message;
 /*---------------------------------------------------------------------------*/
 PROCESS(unicast_sender_process, "Unicast sender example process");
-PROCESS(test_serial, "Serial line test process");
-AUTOSTART_PROCESSES(&unicast_sender_process, &test_serial);
+
+AUTOSTART_PROCESSES(&unicast_sender_process);
 
 /*---------------------------------------------------------------------------*/
 static void
@@ -74,6 +73,12 @@ receiver(struct simple_udp_connection *c,
 {
   printf("Data received on port %d from port %d with length %d\n",
 	  receiver_port, sender_port, datalen);
+  if((*data)==FRAME_START_1 && (*(data+2))==FRAME_START_2)
+	  if((*(data+3))==0){
+		  if((*(data+3))==0) arm_power_off();
+		  else arm_power_on();
+	  }
+	  send_arm((data+2), (datalen-2));
 }
 
 static void
@@ -100,9 +105,8 @@ set_global_address(void)
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(unicast_sender_process, ev, data)
 {
-  static struct etimer periodic_timer;
-  static struct etimer send_timer;
   uip_ipaddr_t *addr;
+  uint8_t i;
 
   PROCESS_BEGIN();
 
@@ -113,48 +117,43 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
   simple_udp_register(&unicast_connection, UDP_PORT,
                       NULL, UDP_PORT, receiver);
 
-  etimer_set(&periodic_timer, SEND_INTERVAL);
   wvwms_init();
+
   while(1) {
-	printf("Calling wvwms test\n");
     wvwms_test();  
-    printf("Exiting wvwms test\n");
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&periodic_timer));
-    printf("X2\n");
-    etimer_reset(&periodic_timer);
-    etimer_set(&send_timer, SEND_TIME);
-    printf("X3\n");
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&send_timer));
-    printf("X4\n");
+    PROCESS_WAIT_EVENT();
     addr = servreg_hack_lookup(SERVICE_ID);
-    printf("X5\n");
-    if(addr != NULL) {
-      static unsigned int message_number;
-      char buf[20];
-      printf("Sending unicast to ");
+    if( (addr != NULL) && (ev == arm_message)) {
+      printf("Sending wvwms message to ");
       uip_debug_ipaddr_print(addr);
       printf("\n");
-      sprintf(buf, "Message %d", message_number);
-      message_number++;
-      simple_udp_sendto(&unicast_connection, buf, strlen(buf) + 1, addr);
+      for(i=0; i<*(char *)data;i++)
+    	  printf("%c", *((char* )data+1+i));
+      simple_udp_sendto(&unicast_connection, (data+1), *((uint8_t *)data) , addr);
     } else {
-      printf("X6\n");
       printf("Service %d not found\n", SERVICE_ID);
+      for(i=0; i<*(char *)data;i++)
+    	  printf("%c", *((char* )data+1+i));
     }
   }
-
-  PROCESS_END();
-}
-
-PROCESS_THREAD(test_serial, ev, data)
-{
-  PROCESS_BEGIN();
-  //for(;;) {
-    PROCESS_YIELD();
-    if(ev == serial_line_event_message) {
-      printf("received line: %s\n", (char *)data);
-    }
-  //}
   PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/
+
+//PROCESS_THREAD(arm_serial_process, ev, data)
+//{
+//  int i;
+//  static struct etimer et;
+//
+//  PROCESS_BEGIN();
+//
+//  while(1) {
+//    PROCESS_WAIT_EVENT();
+//    if(ev == arm_message) {
+//      for(i=0; i<*(char *)data;i++)
+//    	  printf("%c", *((char* )data+1+i));
+//    }
+//  }
+//
+//  PROCESS_END();
+//}
