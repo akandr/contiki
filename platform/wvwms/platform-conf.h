@@ -73,7 +73,7 @@ typedef unsigned long off_t;
 
 #define CFS_CONF_OFFSET_TYPE    long
 
-//#define SLIP_BRIDGE_CONF_NO_PUTCHAR 1
+#define SLIP_BRIDGE_CONF_NO_PUTCHAR 1
 
 /* Use the first 64k of external flash for node configuration */
 #define NODE_ID_XMEM_OFFSET     (0 * XMEM_ERASE_UNIT_SIZE)

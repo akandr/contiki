@@ -32,9 +32,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../wvwms/dev/leds_arch.h"
 #include "dev/cc2520.h"
 //#include "dev/ds2411.h"
-#include "dev/leds.h"
 #include "dev/serial-line.h"
 #include "dev/slip.h"
 #include "dev/uart1.h"
@@ -206,8 +206,9 @@ main(int argc, char **argv)
   clock_wait(2);
 
   uart1_init(115200); /* Must come before first printf */
-
+  printf("Debug console init\n");
 #if WITH_UIP
+  klocek
   slip_arch_init(115200);
 #endif /* WITH_UIP */
 
@@ -250,13 +251,14 @@ main(int argc, char **argv)
   /*
    * Initialize Contiki and our processes.
    */
+  printf("Initialize Contiki and our processes\n");
   process_init();
   process_start(&etimer_process, NULL);
 
   ctimer_init();
 
   init_platform();
-
+  printf(" init_platform();\n");
   set_rime_addr();
 
   cc2520_init();
@@ -275,6 +277,7 @@ main(int argc, char **argv)
 
     cc2520_set_pan_addr(IEEE802154_PANID, shortaddr, longaddr);
   }
+  printf("cc2520_init();\n");
   cc2520_set_channel(RF_CHANNEL);
 
   printf(CONTIKI_VERSION_STRING " started. ");
@@ -285,6 +288,7 @@ main(int argc, char **argv)
   }
 
 #if WITH_UIP6
+  printf("WITH_UIP6 defined \n");
   /* memcpy(&uip_lladdr.addr, ds2411_id, sizeof(uip_lladdr.addr)); */
   memcpy(&uip_lladdr.addr, rimeaddr_node_addr.u8,
          UIP_LLADDR_LEN > RIMEADDR_SIZE ? RIMEADDR_SIZE : UIP_LLADDR_LEN);
@@ -364,6 +368,7 @@ main(int argc, char **argv)
 #endif /* TIMESYNCH_CONF_ENABLED */
 
 #if WITH_UIP
+  printf("WITH_UIP defined \n");
   process_start(&tcpip_process, NULL);
   process_start(&uip_fw_process, NULL);	/* Start IP output */
   process_start(&slip_process, NULL);

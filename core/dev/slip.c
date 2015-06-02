@@ -96,7 +96,8 @@ slip_set_input_callback(void (*c)(void))
 /* slip_send: forward (IPv4) packets with {UIP_FW_NETIF(..., slip_send)}
  * was used in slip-bridge.c
  */
-//#if WITH_UIP
+#if WITH_UIP
+#warning WITH_UIP
 uint8_t
 slip_send(void)
 {
@@ -125,7 +126,7 @@ slip_send(void)
 
   return UIP_FW_OK;
 }
-//#endif /* WITH_UIP */
+#endif /* WITH_UIP */
 /*---------------------------------------------------------------------------*/
 uint8_t
 slip_write(const void *_ptr, int len)
@@ -163,6 +164,7 @@ rxbuf_init(void)
 static uint16_t
 slip_poll_handler(uint8_t *outbuf, uint16_t blen)
 {
+
   /* This is a hack and won't work across buffer edge! */
   if(rxbuf[begin] == 'C') {
     int i;
@@ -253,7 +255,7 @@ slip_poll_handler(uint8_t *outbuf, uint16_t blen)
 PROCESS_THREAD(slip_process, ev, data)
 {
   PROCESS_BEGIN();
-
+  printf("%s\n", __func__);
   rxbuf_init();
 
   while(1) {

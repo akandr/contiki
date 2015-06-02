@@ -1,0 +1,218 @@
+#!/bin/bash
+
+################################################################################
+# Initialization
+
+DEFAULT_WATCHDOG_SCALE=3
+PID_6LBR=0
+PID_WATCHDOG=0
+BIN=""
+PARAMS=""
+
+################################################################################
+#Signals management
+
+#If this script is killed, kills child processes
+trap 'if (( PID_6LBR != 0 )); then kill $PID_6LBR; echo "6LBR killed" >> /dev/stderr; fi; if ((PID_WATCHDOG != 0)); then kill $PID_WATCHDOG; fi' EXIT
+
+#Ignore sighup
+trap '' HUP
+
+################################################################################
+# Application Watchdog
+
+function application_watchdog () {
+	LAST_TIMESTAMP=""
+	WATCHDOG_LIMIT=$((WATCHDOG_INTERVAL * DEFAULT_WATCHDOG_SCALE))
+	while ((1)); do
+		sleep 1
+		if [ `uname` = "Linux" ]; then
+			TIMESTAMP=`stat -c %Y $WATCHDOG_FILE`
+		else
+			TIMESTAMP=`stat -f %m $WATCHDOG_FILE`
+		fi
+		TIME=`date +%s`
+		if (( TIME - TIMESTAMP > WATCHDOG_LIMIT )); then
+			echo "6LBR watchdog failure, restarting..."
+			echo "6LBR watchdog failure, restarting..." >> /dev/stderr
+			if ((PID_6LBR != 0)); then
+				kill $PID_6LBR
+				break
+			fi
+		fi
+	done
+}
+
+################################################################################
+# Read config file
+
+if [ -n "$1" ]; then
+	CFG=$1
+	shift
+else
+	CFG=/etc/6lbr/6lbr.conf
+fi
+
+if [ -e $CFG ]; then
+	. $CFG
+else
+	echo "$0: Configuration file $CFG not found"
+	exit 1
+fi
+
+export CETIC_6LBR_CONF=$CFG
+
+# Bootstrapping
+
+if [ "$LIB_6LBR" != "" ]; then
+	. $LIB_6LBR/6lbr-functions
+elif [ -e `dirname $0`/6lbr-functions ]; then
+	. `dirname $0`/6lbr-functions
+elif [ -e `dirname $0`/../lib/6lbr/6lbr-functions ]; then
+	. `dirname $0`/../lib/6lbr/6lbr-functions
+else
+	echo "$0: Can not find 6lbr-functions"
+	exit 1
+fi
+
+config_default
+
+################################################################################
+# Configure logs
+
+if [ "$LOG_6LBR_OUT" != "-" ]; then
+	exec >> $LOG_6LBR_OUT
+fi
+
+if [ "$LOG_6LBR_ERR" != "-" ]; then
+	exec 2>> $LOG_6LBR_ERR
+fi
+
+export LOG_6LBR_OUT
+export LOG_6LBR_ERR
+
+################################################################################
+# Build parameters list
+
+# Ethernet
+
+if [ "$RAW_ETH" = "1" ]; then
+	PARAM_ETH="-r"
+	ETH_IF=$DEV_ETH
+	if [ "$RAW_ETH_FCS" == "1" ]; then
+		PARAM_ETH="$PARAM_ETH -f"
+	fi
+else
+	PARAM_ETH="-R"
+	ETH_IF=$DEV_TAP
+fi
+
+# Radio configuration
+
+if [ "$DEV_RADIO" != "" ]; then
+	RADIO="-s $DEV_RADIO"
+fi
+
+if [ "$SOCK_RADIO" != "" ]; then
+	RADIO="-a $SOCK_RADIO"
+	if [ "$SOCK_PORT" != "" ]; then
+		RADIO=$RADIO" -p "$SOCK_PORT
+	fi
+fi
+
+if [ "$BAUDRATE" != "" ]; then
+	BAUDRATE="-B $BAUDRATE"
+fi
+
+if [ "$NODE_CONFIG" != "" ]; then
+	NODE_CONFIG="-n $NODE_CONFIG"
+fi
+
+# Global configuration and setup scripts
+
+IFUP="-U $IFUP"
+
+IFDOWN="-D $IFDOWN"
+
+if [ "$IP_CONFIG_FILE" != "" ]; then
+	IP_CONFIG_FILE="-C $IP_CONFIG_FILE"
+fi
+
+if [ "$LOG_LEVEL" != "" ]; then
+	LOG_LEVEL="-L $LOG_LEVEL"
+fi
+
+if [ "$LOG_SERVICES" != "" ]; then
+	LOG_SERVICES="-S $LOG_SERVICES"
+fi
+
+if [ "$PLUGINS_6LBR" != "" ]; then
+	PLUGINS_6LBR="-m $PLUGINS_6LBR"
+fi
+
+PARAMS="-c $NVM $RADIO -t $ETH_IF $PARAM_ETH $BAUDRATE $IFUP $IFDOWN -w $WWW_6LBR $LOG_LEVEL $LOG_SERVICES -W $WATCHDOG_FILE -P $WATCHDOG_INTERVAL $IP_CONFIG_FILE $NODE_CONFIG $PLUGINS_6LBR $EXTRA_PARAMS $*"
+
+if [ "$MODE" = 'ROUTER' ]; then
+	BIN=$BIN_6LBR/cetic_6lbr_router
+elif [ "$MODE" = 'SMART-BRIDGE' ]; then
+	BIN=$BIN_6LBR/cetic_6lbr_smart_bridge
+elif [ "$MODE" = 'RPL-RELAY' ]; then
+	BIN=$BIN_6LBR/cetic_6lbr_rpl_relay
+elif [ "$MODE" = 'FULL-TRANSPARENT-BRIDGE' ]; then
+	BIN=$BIN_6LBR/cetic_6lbr_full_transparent_bridge
+elif [ "$MODE" = 'NDP-ROUTER' ]; then
+	BIN=$BIN_6LBR/cetic_6lbr_ndp_router
+elif [ "$MODE" = '6LR' ]; then
+	BIN=$BIN_6LBR/cetic_6lbr_6lr
+elif [ "$MODE" = 'RPL-ROOT' ]; then
+	BIN=$BIN_6LBR/cetic_6lbr_rpl_root
+else
+	echo "Mode '$MODE' unknown, starting as router"
+	BIN=$BIN_6LBR/cetic_6lbr_router
+fi
+
+################################################################################
+# Launch 6LBR in a loop
+
+while ((1)); do
+	if [ "$MODE" != 'RPL-ROOT' -a "$SOCK_RADIO" = "" ]; then
+		while [ ! -e "$DEV_RADIO" ]; do
+			echo "Waiting for $DEV_RADIO"
+			sleep 10
+		done
+	fi
+	TIMESTAMP=`date`" : Starting 6LBR "
+	echo "********************************************************************************"
+	echo $TIMESTAMP
+	echo "********************************************************************************" >> /dev/stderr
+	echo $TIMESTAMP >> /dev/stderr
+	
+	echo "$BIN $PARAMS"
+	$BIN $PARAMS &
+	PID_6LBR=$!
+	
+	if [ $WATCHDOG_INTERVAL != "0" ]; then
+		application_watchdog &
+		PID_WATCHDOG=$!
+	fi
+	
+	wait $PID_6LBR
+	ECODE=$?
+	PID_6LBR=0
+	
+	if ((PID_WATCHDOG != 0)); then
+		if kill -0 $PID_WATCHDOG 2> /dev/null; then
+			kill $PID_WATCHDOG
+			wait $PID_WATCHDOG
+		fi
+		PID_WATCHDOG=0
+	fi
+	if [ $ECODE != 0 ]; then
+        # 6LBR returned an error, do not start it again
+        echo `date`" : $BIN failed, exit code: $ECODE" >> /dev/stderr
+        if [ "$STOP_AFTER_CRASH" == "1" ]; then
+			break
+		fi
+		sleep 1
+	fi
+done

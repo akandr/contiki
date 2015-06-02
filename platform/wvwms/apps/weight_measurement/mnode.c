@@ -48,7 +48,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define UDP_PORT 1234
+#define UDP_PORT 3000
 #define SERVICE_ID 190
 
 #define SEND_INTERVAL		(1 * CLOCK_SECOND)
@@ -88,7 +88,7 @@ set_global_address(void)
   int i;
   uint8_t state;
 
-  uip_ip6addr(&ipaddr, 0xaaaa, 0, 0, 0, 0, 0, 0, 0);
+  uip_ip6addr(&ipaddr, 0xbbbb, 0, 0, 0, 0, 0, 0, 100);
   uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr);
   uip_ds6_addr_add(&ipaddr, 0, ADDR_AUTOCONF);
 
@@ -107,9 +107,9 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
 {
   uip_ipaddr_t *addr;
   uint8_t i;
-
+  printf("dupa1");
   PROCESS_BEGIN();
-
+  printf("dupa2");
   servreg_hack_init();
 
   set_global_address();

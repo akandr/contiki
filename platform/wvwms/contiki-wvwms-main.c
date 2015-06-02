@@ -138,6 +138,7 @@ set_rime_addr(void)
 
   //	Set node address
 #if UIP_CONF_IPV6
+#warning "UIP_CONF_IPV6"
   //memcpy(addr.u8, ds2411_id, sizeof(addr.u8));
   n_addr.u8[7] = node_id & 0xff;
   n_addr.u8[6] = node_id >> 8;
@@ -163,6 +164,7 @@ set_rime_addr(void)
 }
 /*---------------------------------------------------------------------------*/
 #if !PROCESS_CONF_NO_PROCESS_NAMES
+#warning "!PROCESS_CONF_NO_PROCESS_NAMES"
 static void
 print_processes(struct process * const processes[])
 {
@@ -177,6 +179,7 @@ print_processes(struct process * const processes[])
 #endif /* !PROCESS_CONF_NO_PROCESS_NAMES */
 /*--------------------------------------------------------------------------*/
 #if WITH_UIP
+#warning "WITH_UIP"
 static void
 set_gateway(void)
 {
@@ -192,6 +195,21 @@ set_gateway(void)
   }
 }
 #endif /* WITH_UIP */
+
+void run_leds(void)
+{
+	leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
+	leds_on(LEDS_GREEN);
+	clock_wait(70);
+	leds_on(LEDS_YELLOW);
+	clock_wait(70);
+	leds_on(LEDS_RED);
+	clock_wait(70);
+	leds_on(LEDS_BLUE);
+	clock_wait(70);
+	leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
+	clock_wait(70);
+}
 /*---------------------------------------------------------------------------*/
 int
 main(int argc, char **argv)
@@ -204,14 +222,17 @@ main(int argc, char **argv)
   clock_init();
   leds_init();
   leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
+  //run_leds();
+  //uart0_init(115200); /* Must come before first printf */
+  uart1_init(115200);
 
-
-  uart1_init(115200); /* Must come before first printf */
-
+  printf("UART0 console initialized\n");
+  //slip_arch_init(115200);
 #if WITH_UIP
+#warning "WITH_UIP"
   slip_arch_init(115200);
 #endif /* WITH_UIP */
-
+  leds_on(LEDS_GREEN);
   clock_wait(1);
 
   rtimer_init();
@@ -220,6 +241,7 @@ main(int argc, char **argv)
 
   /* for setting "hardcoded" IEEE 802.15.4 MAC addresses */
 #ifdef IEEE_802154_MAC_ADDRESS
+#warning "IEEE_802154_MAC_ADDRESS"
   {
     uint8_t ieee[] = IEEE_802154_MAC_ADDRESS;
     //memcpy(ds2411_id, ieee, sizeof(uip_lladdr.addr));
@@ -230,9 +252,8 @@ main(int argc, char **argv)
 
   process_init();
   process_start(&etimer_process, NULL);
-
+  printf("process_init();\n");
   ctimer_init();
-
   init_platform();
 
   printf("Contiki 2.7 port WVWMS mote\n");
@@ -263,7 +284,12 @@ main(int argc, char **argv)
     printf("Node id is not set.\n");
   }
 
+
+
+
+
 #if WITH_UIP6
+#warning "WITH_UIP6"
   /* memcpy(&uip_lladdr.addr, ds2411_id, sizeof(uip_lladdr.addr)); */
   memcpy(&uip_lladdr.addr, rimeaddr_node_addr.u8,
          UIP_LLADDR_LEN > RIMEADDR_SIZE ? RIMEADDR_SIZE : UIP_LLADDR_LEN);
@@ -299,6 +325,7 @@ main(int argc, char **argv)
   }
 
   if(!UIP_CONF_IPV6_RPL) {
+#warning "!UIP_CONF_IPV6_RPL"
     uip_ipaddr_t ipaddr;
     int i;
     uip_ip6addr(&ipaddr, 0xaaaa, 0, 0, 0, 0, 0, 0, 0);
@@ -326,23 +353,25 @@ main(int argc, char **argv)
          RF_CHANNEL);
 #endif /* WITH_UIP6 */
 
-#if !WITH_UIP && !WITH_UIP6
-  uart1_set_input(serial_line_input_byte);
-  serial_line_init();
-#endif
+//#if !WITH_UIP && !WITH_UIP6
+//  uart1_set_input(serial_line_input_byte);
+//  serial_line_init();
+//#endif
 
 #if PROFILE_CONF_ON
+#warning "PROFILE_CONF_ON"
   profile_init();
 #endif /* PROFILE_CONF_ON */
 
-  leds_off(LEDS_GREEN);
 
 #if TIMESYNCH_CONF_ENABLED
+#warning "TIMESYNCH_CONF_ENABLED"
   timesynch_init();
   timesynch_set_authority_level((rimeaddr_node_addr.u8[0] << 4) + 16);
 #endif /* TIMESYNCH_CONF_ENABLED */
 
 #if WITH_UIP
+#warning "WITH_UIP"
   process_start(&tcpip_process, NULL);
   process_start(&uip_fw_process, NULL);	/* Start IP output */
   process_start(&slip_process, NULL);
@@ -409,6 +438,7 @@ main(int argc, char **argv)
     int s = splhigh();		/* Disable interrupts. */
     /* uart1_active is for avoiding LPM3 when still sending or receiving */
     if(process_nevents() != 0 || uart1_active()) {
+    //if(process_nevents() != 0 || uart0_active()) {
       splx(s);                  /* Re-enable interrupts. */
     } else {
       static unsigned long irq_energest = 0;
