@@ -43,7 +43,8 @@
 #include "simple-udp.h"
 #include "servreg-hack.h"
 #include "wvwms_functions.h"
-
+#include "dev/serial-line.h"
+#include "dev/uart0.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -56,6 +57,9 @@
 
 static struct simple_udp_connection unicast_connection;
 extern process_event_t arm_message;
+
+
+void send_message(char *buf);
 /*---------------------------------------------------------------------------*/
 PROCESS(unicast_sender_process, "Unicast sender example process");
 
@@ -71,14 +75,20 @@ receiver(struct simple_udp_connection *c,
          const uint8_t *data,
          uint16_t datalen)
 {
-  printf("Data received on port %d from port %d with length %d\n",
+  int i;
+  printf("DR %d FP %d WL %d\n",
 	  receiver_port, sender_port, datalen);
   if((*data)==FRAME_START_1 && (*(data+2))==FRAME_START_2)
 	  if((*(data+3))==0){
 		  if((*(data+3))==0) arm_power_off();
 		  else arm_power_on();
 	  }
-	  send_arm((data+2), (datalen-2));
+	  else{
+		  for(i=0; i<*(char *)data;i++)
+		    printf("%x ", *(data+1+i));
+		  printf("\n");
+		  send_arm((data+2), (datalen-2));
+	  }
 }
 
 static void
@@ -107,9 +117,12 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
 {
   uip_ipaddr_t *addr;
   uint8_t i;
-  printf("dupa1");
+  unsigned int message_number;
+  char buf[20];
+  static struct etimer periodic_timer;
+
   PROCESS_BEGIN();
-  printf("dupa2");
+
   servreg_hack_init();
 
   set_global_address();
@@ -118,11 +131,16 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
                       NULL, UDP_PORT, receiver);
 
   wvwms_init();
-
+  message_number = 0;
+  etimer_set(&periodic_timer, SEND_INTERVAL);
   while(1) {
     wvwms_test();  
     PROCESS_WAIT_EVENT();
     addr = servreg_hack_lookup(SERVICE_ID);
+
+	sprintf(buf, "M %d", message_number);
+	message_number++;
+
     if( (addr != NULL) && (ev == arm_message)) {
       printf("Sending wvwms message to ");
       uip_debug_ipaddr_print(addr);
@@ -130,15 +148,28 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
       for(i=0; i<*(char *)data;i++)
     	  printf("%c", *((char* )data+1+i));
       simple_udp_sendto(&unicast_connection, (data+1), *((uint8_t *)data) , addr);
-    } else {
-      printf("Service %d not found\n", SERVICE_ID);
-      for(i=0; i<*(char *)data;i++)
-    	  printf("%c", *((char* )data+1+i));
+    } else if (ev == arm_message){
+      printf("S %d NF\n", SERVICE_ID);
+    }
+    else
+    {
+        etimer_reset(&periodic_timer);
+        send_message(buf);
     }
   }
   PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/
+
+void send_message(char *buf)
+{
+	uip_ipaddr_t addr;
+	printf("Sending unicast to ");
+	uip_debug_ipaddr_print(&addr);
+	printf("\n");
+	uip_create_linklocal_allnodes_mcast(&addr);
+	simple_udp_sendto(&unicast_connection, buf, strlen(buf) + 1, &addr);
+}
 
 //PROCESS_THREAD(arm_serial_process, ev, data)
 //{

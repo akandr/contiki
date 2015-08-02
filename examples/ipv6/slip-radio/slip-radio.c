@@ -39,9 +39,10 @@
 #include "net/uip-ds6.h"
 #include "dev/slip.h"
 #include <string.h>
+#include <stdio.h>
 #include "net/netstack.h"
 #include "net/packetbuf.h"
-
+#include "dev/leds.h"
 #define DEBUG DEBUG_NONE
 #include "net/uip-debug.h"
 #include "cmd.h"
@@ -58,14 +59,21 @@ void slip_send_packet(const uint8_t *ptr, int len);
 uint8_t packet_ids[16];
 int packet_pos;
 
+/*---------------------------------------------------------------------------*/
+PROCESS(slip_radio_process, "Slip radio process");
+AUTOSTART_PROCESSES(&slip_radio_process);
+/*---------------------------------------------------------------------------*/
+
 static int slip_radio_cmd_handler(const uint8_t *data, int len);
 int cmd_handler_cc2420(const uint8_t *data, int len);
 /*---------------------------------------------------------------------------*/
-#ifdef CMD_CONF_HANDLERS
-CMD_HANDLERS(CMD_CONF_HANDLERS);
-#else
+//#ifdef CMD_CONF_HANDLERS
+//#warning CMD_CONF_HANDLERS
+//CMD_HANDLERS(CMD_CONF_HANDLERS);
+//#else
+#warning CMD_HANDLERS(slip_radio_cmd_handler);
 CMD_HANDLERS(slip_radio_cmd_handler);
-#endif
+//#endif
 /*---------------------------------------------------------------------------*/
 static void
 packet_sent(void *ptr, int status, int transmissions)
@@ -152,6 +160,7 @@ slip_radio_cmd_output(const uint8_t *data, int data_len)
 static void
 slip_input_callback(void)
 {
+	leds_on(LEDS_BLUE);
   PRINTF("SR-SIN: %u '%c%c'\n", uip_len, uip_buf[0], uip_buf[1]);
   cmd_input(uip_buf, uip_len);
   uip_len = 0;
@@ -163,6 +172,7 @@ init(void)
 #ifndef BAUD2UBR
 #define BAUD2UBR(baud) baud
 #endif
+  leds_on(LEDS_RED);
   slip_arch_init(BAUD2UBR(115200));
   process_start(&slip_process, NULL);
   slip_set_input_callback(slip_input_callback);
@@ -171,6 +181,7 @@ init(void)
 /*---------------------------------------------------------------------------*/
 #if !SLIP_RADIO_CONF_NO_PUTCHAR
 #undef putchar
+#warning "!SLIP_RADIO_CONF_NO_PUTCHAR"
 int
 putchar(int c)
 {
@@ -198,32 +209,22 @@ putchar(int c)
   return c;
 }
 #endif
-/*---------------------------------------------------------------------------*/
-PROCESS(slip_radio_process, "Slip radio process");
-AUTOSTART_PROCESSES(&slip_radio_process);
-/*---------------------------------------------------------------------------*/
+
 PROCESS_THREAD(slip_radio_process, ev, data)
 {
   static struct etimer et;
   PROCESS_BEGIN();
-
   init();
   NETSTACK_RDC.off(1);
-#ifdef SLIP_RADIO_CONF_SENSORS
-  SLIP_RADIO_CONF_SENSORS.init();
-#endif
+
   printf("Slip Radio started...\n");
 
   etimer_set(&et, CLOCK_SECOND * 3);
 
   while(1) {
     PROCESS_YIELD();
-
     if(etimer_expired(&et)) {
       etimer_reset(&et);
-#ifdef SLIP_RADIO_CONF_SENSORS
-      SLIP_RADIO_CONF_SENSORS.send();
-#endif
     }
   }
   PROCESS_END();

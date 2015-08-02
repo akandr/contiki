@@ -13,6 +13,7 @@ process_event_t arm_message;
 int arm_handler(unsigned char c)
 {
 	uint16_t i;
+	printf("This is arm handler!\n");
 	if((cnt==0)&&(c==FRAME_START_1)){
 		cnt++;
 		return 0;

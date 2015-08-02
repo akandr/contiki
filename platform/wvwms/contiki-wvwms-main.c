@@ -126,7 +126,7 @@ force_inclusion(int d1, int d2)
 #endif
 /*---------------------------------------------------------------------------*/
 #ifndef NODE_ID
-#define NODE_ID	0x02
+#define NODE_ID	0x03
 #endif /* NODE_ID */
 static void
 set_rime_addr(void)
@@ -223,10 +223,11 @@ main(int argc, char **argv)
   leds_init();
   leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
   //run_leds();
+  //for slip disable uart0
   //uart0_init(115200); /* Must come before first printf */
   uart1_init(115200);
 
-  printf("UART0 console initialized\n");
+  printf("UART1 console initialized\n");
   //slip_arch_init(115200);
 #if WITH_UIP
 #warning "WITH_UIP"
