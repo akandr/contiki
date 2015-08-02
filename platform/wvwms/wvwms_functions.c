@@ -2,6 +2,7 @@
 #include "dev/leds.h"
 #include "dev/uart0.h"
 #include "contiki.h"
+#include "dev/serial-line.h"
 
 uint8_t cnt;
 uint8_t frame_size;
@@ -64,7 +65,6 @@ void wvwms_init(void)
     uart0_init(115200);
     uart0_set_input(&arm_handler);
     arm_message = process_alloc_event();
-    printf("%s executed\n", __func__);
 }
 
 void arm_power_off(void)
@@ -92,7 +92,7 @@ void wvwms_test(void)
 {
 	unsigned char data[] = "this is msp\n";
 	leds_toggle(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
-	printf("This is wvwms test %s %s\n", __DATE__, __TIME__);
+	printf(".");
 	send_arm(data, sizeof(data));
 }
 

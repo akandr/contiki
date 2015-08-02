@@ -231,6 +231,7 @@ main(int argc, char **argv)
   //slip_arch_init(115200);
 #if WITH_UIP
 #warning "WITH_UIP"
+  // enable for slip
   slip_arch_init(115200);
 #endif /* WITH_UIP */
   leds_on(LEDS_GREEN);
@@ -438,8 +439,9 @@ main(int argc, char **argv)
      */
     int s = splhigh();		/* Disable interrupts. */
     /* uart1_active is for avoiding LPM3 when still sending or receiving */
+    // uart 1 for slip
     if(process_nevents() != 0 || uart1_active()) {
-    //if(process_nevents() != 0 || uart0_active()) {
+    //if(process_nevents() != 0 || uart0_active() || uart1_active()) {
       splx(s);                  /* Re-enable interrupts. */
     } else {
       static unsigned long irq_energest = 0;

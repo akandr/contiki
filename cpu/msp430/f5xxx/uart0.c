@@ -102,11 +102,12 @@ uart0_init(unsigned long ubr)
 ISR(USCI_A0, uart0_rx_interrupt)
 {
   uint8_t c;
+  printf("ISR");
   ENERGEST_ON(ENERGEST_TYPE_IRQ);
   if(UCA0IV == 2) {
     if(UCA0STAT & UCRXERR) {
-      printf("USCI A0 error %x %x\n", UCA0STAT, UCRXERR);
       c = UCA0RXBUF;   /* Clear error flags by forcing a dummy read. */
+      printf("UCER");
     } else {
       c = UCA0RXBUF;
       if(uart0_input_handler != NULL) {
