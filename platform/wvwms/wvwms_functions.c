@@ -2,7 +2,6 @@
 #include "dev/leds.h"
 #include "dev/uart0.h"
 #include "contiki.h"
-#include "dev/serial-line.h"
 
 uint8_t cnt;
 uint8_t frame_size;
@@ -13,8 +12,7 @@ process_event_t arm_message;
 
 int arm_handler(unsigned char c)
 {
-	uint16_t i;
-	printf("This is arm handler!\n");
+//	printf("*");
 	if((cnt==0)&&(c==FRAME_START_1)){
 		cnt++;
 		return 0;
@@ -40,9 +38,12 @@ int arm_handler(unsigned char c)
 		return 0;
 	}
 	else{
-		for(i=0;i<=frame_size;i++){
-			msg[i]=rxbuf[2+i];
-		}
+		memcpy(msg, rxbuf+2, frame_size);
+//		for(i=0;i<=frame_size;i++){
+//			msg[i]=rxbuf[2+i];
+//			//printf(" %02x|", (unsigned int) 0xFF & msg[i]);
+//		}
+//		printf("\n");
 		cnt=0;
 		frame_size=0;
 		process_post(PROCESS_BROADCAST, arm_message, msg);
@@ -53,7 +54,7 @@ int arm_handler(unsigned char c)
 void wvwms_init(void)
 {
     MCP_ENABLE_DIR;
-    MCP_ENABLE_HI;
+    MCP_ENABLE_HI; //power up the arm
     P1SEL = P1SEL | mcuint2mask;
     P1DIR |= mcuint2mask;
     MEM_CS_DIR;
@@ -62,9 +63,11 @@ void wvwms_init(void)
     ARM_CS_HI;
     cnt=0;
     frame_size=0;
-    uart0_init(115200);
+    uart0_init(2000000);
     uart0_set_input(&arm_handler);
     arm_message = process_alloc_event();
+    leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
+    printf("%s executed\n\r", __func__);
 }
 
 void arm_power_off(void)
@@ -77,15 +80,18 @@ void arm_power_on(void)
 	MCP_ENABLE_HI;
 }
 
-void send_arm(char *data, uint8_t size)
+void send_arm(unsigned char *data, uint8_t size)
 {
 	uint8_t i;
 	uart0_writeb(FRAME_START_1);
 	uart0_writeb(FRAME_START_2);
 	uart0_writeb((unsigned char)size);
+	printf("Writing uart0: \n\r");
 	for(i=0;i<size;i++){
+		printf("0x%02x |", *(data+i));
 		uart0_writeb(*(data+i));
 	}
+	printf("\n\r");
 }
 
 void wvwms_test(void)

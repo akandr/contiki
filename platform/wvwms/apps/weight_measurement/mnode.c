@@ -51,6 +51,7 @@
 
 #define UDP_PORT 3000
 #define SERVICE_ID 190
+#define RX_BUFFER_SIZE 255
 
 #define SEND_INTERVAL		(1 * CLOCK_SECOND)
 #define SEND_TIME		(random_rand() % (SEND_INTERVAL))
@@ -58,8 +59,7 @@
 static struct simple_udp_connection unicast_connection;
 extern process_event_t arm_message;
 
-
-void send_message(char *buf);
+void send_message(unsigned char *buf, uint8_t size);
 /*---------------------------------------------------------------------------*/
 PROCESS(unicast_sender_process, "Unicast sender example process");
 
@@ -75,20 +75,34 @@ receiver(struct simple_udp_connection *c,
          const uint8_t *data,
          uint16_t datalen)
 {
-  int i;
-  printf("DR %d FP %d WL %d\n",
+  uint8_t size, i;
+  unsigned char buffer[RX_BUFFER_SIZE];
+  unsigned char ok[]={0x1, 0xFE};
+  printf("\n\rDR %d FP %d WL %d\n\r",
 	  receiver_port, sender_port, datalen);
-  if((*data)==FRAME_START_1 && (*(data+2))==FRAME_START_2)
+  if((*data)==FRAME_START_1 && (*(data+1))==FRAME_START_2 &&  (*(data+2))>0){
+	  size = *(data+2);
+	  printf("\n\rUDP Received size:%d :\n\r", 0xFF & size);
 	  if((*(data+3))==0){
-		  if((*(data+3))==0) arm_power_off();
-		  else arm_power_on();
+		  if((*(data+4))==0) {
+			  printf("VDD disabled \n\r");
+			  arm_power_off();
+		  }
+		  else{
+			  printf("VDD enabled \n\r");
+			  arm_power_on();
+		  }
+		  send_message(ok, sizeof(ok));
 	  }
 	  else{
-		  for(i=0; i<*(char *)data;i++)
-		    printf("%x ", *(data+1+i));
-		  printf("\n");
-		  send_arm((data+2), (datalen-2));
+		  for(i=0; i<size;i++){
+		    printf("0x%02x |", (0xFF & *((char *)data+3+i)));
+		  	buffer[i] = *((char *)data+3+i);
+		  }
+		  printf("\n\r");
+		  send_arm(buffer, size);
 	  }
+  }
 }
 
 static void
@@ -115,11 +129,9 @@ set_global_address(void)
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(unicast_sender_process, ev, data)
 {
-  uip_ipaddr_t *addr;
+  uip_ipaddr_t addr;
   uint8_t i;
-  unsigned int message_number;
-  char buf[20];
-  static struct etimer periodic_timer;
+  unsigned char *ptr;
 
   PROCESS_BEGIN();
 
@@ -131,60 +143,33 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
                       NULL, UDP_PORT, receiver);
 
   wvwms_init();
-  message_number = 0;
-  etimer_set(&periodic_timer, SEND_INTERVAL);
+  uip_create_linklocal_allnodes_mcast(&addr);
   while(1) {
-    wvwms_test();  
+//    printf("Waiting for event \n\r");
     PROCESS_WAIT_EVENT();
-    addr = servreg_hack_lookup(SERVICE_ID);
-
-	sprintf(buf, "M %d", message_number);
-	message_number++;
-
-    if( (addr != NULL) && (ev == arm_message)) {
-      printf("Sending wvwms message to ");
-      uip_debug_ipaddr_print(addr);
-      printf("\n");
-      for(i=0; i<*(char *)data;i++)
-    	  printf("%c", *((char* )data+1+i));
-      simple_udp_sendto(&unicast_connection, (data+1), *((uint8_t *)data) , addr);
-    } else if (ev == arm_message){
-      printf("S %d NF\n", SERVICE_ID);
-    }
-    else
-    {
-        etimer_reset(&periodic_timer);
-        send_message(buf);
+    if(ev != 122) printf("\n\rEv:%d\n\r",ev);
+    if(ev == arm_message) {
+//      ptr = (unsigned char *) data;
+//      printf("\nFROM ARM %u: ", (unsigned int) 0xFF & *ptr);
+//      for(i=0; i<=*(char *)ptr;i++)
+//    	  printf("0x%02x |",  (unsigned int)0xFF & (*(ptr+i)));
+//      printf("\n\r");
+//      send_message((unsigned char *) data, (uint8_t)(*((unsigned char *)data))+1);
+    	simple_udp_sendto(&unicast_connection, (unsigned char *) data,
+    			(uint8_t)(*((unsigned char *)data))+1, &addr);
+    }else{
+    	printf("\n\rEv:%d\n\r",ev);
     }
   }
   PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/
 
-void send_message(char *buf)
+void send_message(unsigned char *buf, uint8_t size)
 {
 	uip_ipaddr_t addr;
-	printf("Sending unicast to ");
-	uip_debug_ipaddr_print(&addr);
-	printf("\n");
+//	printf("\n\rUDP send\n\r");
 	uip_create_linklocal_allnodes_mcast(&addr);
-	simple_udp_sendto(&unicast_connection, buf, strlen(buf) + 1, &addr);
+	simple_udp_sendto(&unicast_connection, buf, size, &addr);
 }
 
-//PROCESS_THREAD(arm_serial_process, ev, data)
-//{
-//  int i;
-//  static struct etimer et;
-//
-//  PROCESS_BEGIN();
-//
-//  while(1) {
-//    PROCESS_WAIT_EVENT();
-//    if(ev == arm_message) {
-//      for(i=0; i<*(char *)data;i++)
-//    	  printf("%c", *((char* )data+1+i));
-//    }
-//  }
-//
-//  PROCESS_END();
-//}
