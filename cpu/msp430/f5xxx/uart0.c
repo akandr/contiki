@@ -105,7 +105,7 @@ ISR(USCI_A0, uart0_rx_interrupt)
   ENERGEST_ON(ENERGEST_TYPE_IRQ);
   if(UCA0IV == 2) {
     if(UCA0STAT & UCRXERR) {
-      printf("USCI A0 error 0x02%x\n", UCA0STAT);
+      printf("UCA0STAT 0x%02x\n", UCA0STAT);
       c = UCA0RXBUF;   /* Clear error flags by forcing a dummy read. */
     } else {
       c = UCA0RXBUF;

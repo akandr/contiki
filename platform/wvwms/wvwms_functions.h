@@ -1,4 +1,4 @@
-#include "contiki.h"
+//#include "contiki.h"
 #include <stdio.h>
 
 // ---------------- WVWMS platform hardware definitions ----------------
@@ -38,8 +38,8 @@
 #define FRAME_START_1 0x7A
 #define FRAME_START_2 0xA7
 
-void wvwms_init(void);
-void wvwms_test(void);
-void arm_power_off(void);
-void arm_power_on(void);
-void send_arm(unsigned char *data, uint8_t size);
+//void wvwms_init(void);
+//void wvwms_test(void);
+//void arm_power_off(void);
+//void arm_power_on(void);
+//void send_arm(unsigned char *data, uint8_t size);

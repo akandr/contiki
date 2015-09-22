@@ -13,41 +13,45 @@ process_event_t arm_message;
 int arm_handler(unsigned char c)
 {
 //	printf("*");
+	_DINT();
 	if((cnt==0)&&(c==FRAME_START_1)){
 		cnt++;
-		return 0;
+		goto exit;
 	}
 	else if((cnt==1)&&(c==FRAME_START_2)){
 		cnt++;
-		return 0;
+		goto exit;
 	}
 	else if((cnt == 0)||(cnt== 1)) {
 		cnt=0;
 		frame_size=0;
-		return 0;
+		goto exit;
 	}
 	else if(cnt==2){
 		frame_size=c;
 		rxbuf[cnt]=frame_size;
 		cnt++;
-		return 0;
+		goto exit;
 	}
 	else if(cnt>2 && (cnt<(frame_size+3))){
 		rxbuf[cnt]=c;
 		cnt++;
-		return 0;
+		goto exit;
 	}
 	else{
-		memcpy(msg, rxbuf+2, frame_size);
+		memcpy(msg, rxbuf+2, frame_size+1);
 //		for(i=0;i<=frame_size;i++){
 //			msg[i]=rxbuf[2+i];
 //			//printf(" %02x|", (unsigned int) 0xFF & msg[i]);
 //		}
-//		printf("\n");
+		printf("!\n");
 		cnt=0;
 		frame_size=0;
+		_EINT();
 		process_post(PROCESS_BROADCAST, arm_message, msg);
 	}
+exit:
+	_EINT();
 	return 0;
 }
 
@@ -63,7 +67,7 @@ void wvwms_init(void)
     ARM_CS_HI;
     cnt=0;
     frame_size=0;
-    uart0_init(2000000);
+    uart0_init(500000);
     uart0_set_input(&arm_handler);
     arm_message = process_alloc_event();
     leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);

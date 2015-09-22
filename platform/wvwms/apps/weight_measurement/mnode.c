@@ -37,7 +37,7 @@
 #include "net/uip.h"
 #include "net/uip-ds6.h"
 #include "net/uip-debug.h"
-
+#include "dev/leds.h"
 #include "sys/node-id.h"
 
 #include "simple-udp.h"
@@ -57,9 +57,17 @@
 #define SEND_TIME		(random_rand() % (SEND_INTERVAL))
 
 static struct simple_udp_connection unicast_connection;
-extern process_event_t arm_message;
 
-void send_message(unsigned char *buf, uint8_t size);
+uint8_t cnt;
+uint8_t frame_size;
+unsigned char rxbuf[RXBUF_SIZE];
+
+void wvwms_init(void);
+void wvwms_test(void);
+void arm_power_off(void);
+void arm_power_on(void);
+void send_arm(unsigned char *data, uint8_t size);
+//void send_message(unsigned char *buf, uint8_t size);
 /*---------------------------------------------------------------------------*/
 PROCESS(unicast_sender_process, "Unicast sender example process");
 
@@ -92,7 +100,12 @@ receiver(struct simple_udp_connection *c,
 			  printf("VDD enabled \n\r");
 			  arm_power_on();
 		  }
-		  send_message(ok, sizeof(ok));
+		  /* sends ok */
+		  rxbuf[0]=0x02;
+		  rxbuf[1]=0x01;
+		  rxbuf[2]=0xFE;
+		  process_poll(&unicast_sender_process);
+		  leds_toggle(LEDS_BLUE);
 	  }
 	  else{
 		  for(i=0; i<size;i++){
@@ -100,6 +113,7 @@ receiver(struct simple_udp_connection *c,
 		  	buffer[i] = *((char *)data+3+i);
 		  }
 		  printf("\n\r");
+		  leds_toggle(LEDS_YELLOW);
 		  send_arm(buffer, size);
 	  }
   }
@@ -129,10 +143,9 @@ set_global_address(void)
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(unicast_sender_process, ev, data)
 {
+  int i;
   uip_ipaddr_t addr;
-  uint8_t i;
-  unsigned char *ptr;
-
+  char test[]= { 0xAA, 0x77 };
   PROCESS_BEGIN();
 
   servreg_hack_init();
@@ -145,31 +158,117 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
   wvwms_init();
   uip_create_linklocal_allnodes_mcast(&addr);
   while(1) {
-//    printf("Waiting for event \n\r");
-    PROCESS_WAIT_EVENT();
-    if(ev != 122) printf("\n\rEv:%d\n\r",ev);
-    if(ev == arm_message) {
-//      ptr = (unsigned char *) data;
-//      printf("\nFROM ARM %u: ", (unsigned int) 0xFF & *ptr);
-//      for(i=0; i<=*(char *)ptr;i++)
-//    	  printf("0x%02x |",  (unsigned int)0xFF & (*(ptr+i)));
-//      printf("\n\r");
-//      send_message((unsigned char *) data, (uint8_t)(*((unsigned char *)data))+1);
-    	simple_udp_sendto(&unicast_connection, (unsigned char *) data,
-    			(uint8_t)(*((unsigned char *)data))+1, &addr);
-    }else{
-    	printf("\n\rEv:%d\n\r",ev);
-    }
+	PROCESS_WAIT_UNTIL(PROCESS_EVENT_POLL);
+//	for(i=0;i<((uint8_t)(*((unsigned char *)rxbuf))+1);i++){
+//		printf("0x%02x|", (unsigned int) 0xFF & rxbuf[i]);
+//	}
+//	printf("\n\r");
+	simple_udp_sendto(&unicast_connection, (unsigned char *) rxbuf,
+			(uint8_t)(*((unsigned char *)rxbuf))+1, &addr);
+	leds_toggle(LEDS_GREEN);
   }
   PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/
 
-void send_message(unsigned char *buf, uint8_t size)
-{
-	uip_ipaddr_t addr;
+//void send_message(unsigned char *buf, uint8_t size)
+//{
+//	uip_ipaddr_t addr;
 //	printf("\n\rUDP send\n\r");
-	uip_create_linklocal_allnodes_mcast(&addr);
-	simple_udp_sendto(&unicast_connection, buf, size, &addr);
+//	uip_create_linklocal_allnodes_mcast(&addr);
+//	simple_udp_sendto(&unicast_connection, buf, size, &addr);
+//}
+
+int arm_handler(unsigned char c)
+{
+	leds_toggle(LEDS_RED);
+	if((cnt==0)&&(c==FRAME_START_1)){
+		cnt++;
+		goto exit;
+	}
+	if((cnt==1)&&(c==FRAME_START_2)){
+		cnt++;
+		goto exit;
+	}
+	if((cnt == 0)||(cnt== 1)) {
+		cnt=0;
+		frame_size=0;
+		goto exit;
+	}
+	if(cnt==2){
+		frame_size=c;
+		rxbuf[0]=frame_size;
+		cnt++;
+		goto exit;
+	}
+	else if(cnt>2 && (cnt<(frame_size+2))){
+		rxbuf[cnt-2]=c;
+		cnt++;
+		goto exit;
+	}
+	else{
+//		for(i=0;i<=frame_size;i++){
+//			msg[i]=rxbuf[2+i];
+//			//printf(" %02x|", (unsigned int) 0xFF & msg[i]);
+//		}
+		rxbuf[cnt-2]=c;
+		cnt=0;
+		frame_size=0;
+//		printf("i");
+		process_poll(&unicast_sender_process);
+	}
+exit:
+	return 0;
 }
+
+void wvwms_init(void)
+{
+    MCP_ENABLE_DIR;
+    MCP_ENABLE_HI; //power up the arm
+    P1SEL = P1SEL | mcuint2mask;
+    P1DIR |= mcuint2mask;
+    MEM_CS_DIR;
+    MEM_DESELECT;
+    ARM_CS_DIR;
+    ARM_CS_HI;
+    cnt=0;
+    frame_size=0;
+    uart0_init(260000);
+    uart0_set_input(&arm_handler);
+    leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
+    printf("%s executed\n\r", __func__);
+}
+
+void arm_power_off(void)
+{
+	MCP_ENABLE_LOW;
+}
+
+void arm_power_on(void)
+{
+	MCP_ENABLE_HI;
+}
+
+void send_arm(unsigned char *data, uint8_t size)
+{
+	uint8_t i;
+	uart0_writeb(FRAME_START_1);
+	uart0_writeb(FRAME_START_2);
+	uart0_writeb((unsigned char)size);
+	printf("Writing uart0: \n\r");
+	for(i=0;i<size;i++){
+		printf("0x%02x |", *(data+i));
+		uart0_writeb(*(data+i));
+	}
+	printf("\n\r");
+}
+
+void wvwms_test(void)
+{
+	unsigned char data[] = "this is msp\n";
+	leds_toggle(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
+	printf(".");
+	send_arm(data, sizeof(data));
+}
+
 
