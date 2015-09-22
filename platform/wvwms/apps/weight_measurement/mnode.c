@@ -52,11 +52,12 @@
 #define UDP_PORT 3000
 #define SERVICE_ID 190
 #define RX_BUFFER_SIZE 255
+#define UART_BAUDRATE 2000000
 
 #define SEND_INTERVAL		(1 * CLOCK_SECOND)
 #define SEND_TIME		(random_rand() % (SEND_INTERVAL))
 
-static struct simple_udp_connection unicast_connection;
+static struct simple_udp_connection sender_connection, receiver_connection;
 
 uint8_t cnt;
 uint8_t frame_size;
@@ -70,6 +71,7 @@ void send_arm(unsigned char *data, uint8_t size);
 //void send_message(unsigned char *buf, uint8_t size);
 /*---------------------------------------------------------------------------*/
 PROCESS(unicast_sender_process, "Unicast sender example process");
+//PROCESS(msp_sender_process, "MSP sender example process");
 
 AUTOSTART_PROCESSES(&unicast_sender_process);
 
@@ -101,10 +103,10 @@ receiver(struct simple_udp_connection *c,
 			  arm_power_on();
 		  }
 		  /* sends ok */
-		  rxbuf[0]=0x02;
-		  rxbuf[1]=0x01;
-		  rxbuf[2]=0xFE;
-		  process_poll(&unicast_sender_process);
+//		  rxbuf[0]=0x02;
+//		  rxbuf[1]=0x01;
+//		  rxbuf[2]=0xFE;
+//		  process_poll(&unicast_sender_process);
 		  leds_toggle(LEDS_BLUE);
 	  }
 	  else{
@@ -152,23 +154,45 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
 
   set_global_address();
 
-  simple_udp_register(&unicast_connection, UDP_PORT,
-                      NULL, UDP_PORT, receiver);
+  simple_udp_register(&receiver_connection, UDP_PORT,
+                      NULL, NULL, receiver);
+
+  simple_udp_register(&sender_connection, NULL,
+                      NULL, 3001, NULL);
 
   wvwms_init();
   uip_create_linklocal_allnodes_mcast(&addr);
   while(1) {
-	PROCESS_WAIT_UNTIL(PROCESS_EVENT_POLL);
+	PROCESS_WAIT_EVENT_UNTIL(ev == PROCESS_EVENT_POLL);
 //	for(i=0;i<((uint8_t)(*((unsigned char *)rxbuf))+1);i++){
 //		printf("0x%02x|", (unsigned int) 0xFF & rxbuf[i]);
 //	}
 //	printf("\n\r");
-	simple_udp_sendto(&unicast_connection, (unsigned char *) rxbuf,
+	uip_create_linklocal_allnodes_mcast(&addr);
+	simple_udp_sendto(&sender_connection, (unsigned char *) rxbuf,
 			(uint8_t)(*((unsigned char *)rxbuf))+1, &addr);
 	leds_toggle(LEDS_GREEN);
+	ev = PROCESS_NONE;
   }
   PROCESS_END();
 }
+
+//PROCESS_THREAD(msp_sender_process, ev, data)
+//{
+//	int i;
+//	uip_ipaddr_t addr;
+//	PROCESS_BEGIN();
+////	PROCESS_WAIT_UNTIL(PROCESS_EVENT_POLL);
+//	uip_create_linklocal_allnodes_mcast(&addr);
+//	for(i=0;i<((uint8_t)(*((unsigned char *)rxbuf))+1);i++){
+//		printf("0x%02x|", (unsigned int) 0xFF & rxbuf[i]);
+//	}
+//	printf("\n\r");
+//	simple_udp_sendto(&unicast_connection, (unsigned char *) rxbuf,
+//			(uint8_t)(*((unsigned char *)rxbuf))+1, &addr);
+//	leds_toggle(LEDS_GREEN);
+//	PROCESS_END();
+//}
 /*---------------------------------------------------------------------------*/
 
 //void send_message(unsigned char *buf, uint8_t size)
@@ -201,20 +225,16 @@ int arm_handler(unsigned char c)
 		cnt++;
 		goto exit;
 	}
-	else if(cnt>2 && (cnt<(frame_size+2))){
+	if(cnt>2 && (cnt<(frame_size+2))){
 		rxbuf[cnt-2]=c;
 		cnt++;
 		goto exit;
 	}
-	else{
-//		for(i=0;i<=frame_size;i++){
-//			msg[i]=rxbuf[2+i];
-//			//printf(" %02x|", (unsigned int) 0xFF & msg[i]);
-//		}
+	if((cnt>=(frame_size+2)) && frame_size>0 ){
 		rxbuf[cnt-2]=c;
 		cnt=0;
 		frame_size=0;
-//		printf("i");
+//		printf("*");
 		process_poll(&unicast_sender_process);
 	}
 exit:
@@ -233,7 +253,7 @@ void wvwms_init(void)
     ARM_CS_HI;
     cnt=0;
     frame_size=0;
-    uart0_init(260000);
+    uart0_init(UART_BAUDRATE);
     uart0_set_input(&arm_handler);
     leds_off(LEDS_RED | LEDS_GREEN| LEDS_BLUE| LEDS_YELLOW);
     printf("%s executed\n\r", __func__);
