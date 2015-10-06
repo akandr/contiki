@@ -34,7 +34,7 @@
 #define ARM_CS_HI  P3OUT|=BIT6
 //------------------------------------------------------------------
 
-#define RXBUF_SIZE 32
+#define RXBUF_SIZE 255
 #define FRAME_START_1 0x7A
 #define FRAME_START_2 0xA7
 

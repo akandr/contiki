@@ -52,12 +52,13 @@
 #define UDP_PORT 3000
 #define SERVICE_ID 190
 #define RX_BUFFER_SIZE 255
-#define UART_BAUDRATE 2000000
+#define UART_BAUDRATE 115200
 
 #define SEND_INTERVAL		(1 * CLOCK_SECOND)
 #define SEND_TIME		(random_rand() % (SEND_INTERVAL))
 
 static struct simple_udp_connection sender_connection, receiver_connection;
+uip_ipaddr_t addr;
 
 uint8_t cnt;
 uint8_t frame_size;
@@ -87,7 +88,7 @@ receiver(struct simple_udp_connection *c,
 {
   uint8_t size, i;
   unsigned char buffer[RX_BUFFER_SIZE];
-  unsigned char ok[]={0x1, 0xFE};
+//  unsigned char ok[]={0x1, 0xFE};
   printf("\n\rDR %d FP %d WL %d\n\r",
 	  receiver_port, sender_port, datalen);
   if((*data)==FRAME_START_1 && (*(data+1))==FRAME_START_2 &&  (*(data+2))>0){
@@ -145,9 +146,9 @@ set_global_address(void)
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(unicast_sender_process, ev, data)
 {
-  int i;
-  uip_ipaddr_t addr;
-  char test[]= { 0xAA, 0x77 };
+//  int i;
+//  uip_ipaddr_t addr;
+//  char test[]= { 0xAA, 0x77 };
   PROCESS_BEGIN();
 
   servreg_hack_init();
@@ -155,24 +156,27 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
   set_global_address();
 
   simple_udp_register(&receiver_connection, UDP_PORT,
-                      NULL, NULL, receiver);
+                      NULL, (uint16_t) NULL, receiver);
 
-  simple_udp_register(&sender_connection, NULL,
-                      NULL, 3001, NULL);
+  simple_udp_register(&sender_connection, (uint16_t) NULL,
+		  	  	  	   NULL, 3001, NULL);
 
   wvwms_init();
   uip_create_linklocal_allnodes_mcast(&addr);
   while(1) {
 	PROCESS_WAIT_EVENT_UNTIL(ev == PROCESS_EVENT_POLL);
+	ev = PROCESS_NONE;
+	printf("'", ev);
 //	for(i=0;i<((uint8_t)(*((unsigned char *)rxbuf))+1);i++){
 //		printf("0x%02x|", (unsigned int) 0xFF & rxbuf[i]);
 //	}
 //	printf("\n\r");
-	uip_create_linklocal_allnodes_mcast(&addr);
+//	uip_create_linklocal_allnodes_mcast(&addr);
 	simple_udp_sendto(&sender_connection, (unsigned char *) rxbuf,
 			(uint8_t)(*((unsigned char *)rxbuf))+1, &addr);
 	leds_toggle(LEDS_GREEN);
-	ev = PROCESS_NONE;
+	ARM_CS_LOW;
+	printf("*", ev);
   }
   PROCESS_END();
 }
@@ -205,7 +209,6 @@ PROCESS_THREAD(unicast_sender_process, ev, data)
 
 int arm_handler(unsigned char c)
 {
-	leds_toggle(LEDS_RED);
 	if((cnt==0)&&(c==FRAME_START_1)){
 		cnt++;
 		goto exit;
@@ -214,7 +217,8 @@ int arm_handler(unsigned char c)
 		cnt++;
 		goto exit;
 	}
-	if((cnt == 0)||(cnt== 1)) {
+	if((cnt == 0)||(cnt == 1)) {
+		printf("?");
 		cnt=0;
 		frame_size=0;
 		goto exit;
@@ -233,8 +237,10 @@ int arm_handler(unsigned char c)
 	if((cnt>=(frame_size+2)) && frame_size>0 ){
 		rxbuf[cnt-2]=c;
 		cnt=0;
+		printf("Frame size %u\n\r", frame_size);
 		frame_size=0;
-//		printf("*");
+		leds_toggle(LEDS_RED);
+		ARM_CS_HI;
 		process_poll(&unicast_sender_process);
 	}
 exit:
@@ -250,7 +256,7 @@ void wvwms_init(void)
     MEM_CS_DIR;
     MEM_DESELECT;
     ARM_CS_DIR;
-    ARM_CS_HI;
+    ARM_CS_LOW;
     cnt=0;
     frame_size=0;
     uart0_init(UART_BAUDRATE);
